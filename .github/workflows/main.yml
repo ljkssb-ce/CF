@@ -16,30 +16,21 @@ jobs:
 
       - name: Fetch and Format IPs
         run: |
-          # 创建或清空 ip.txt
-          cat /dev/null > ip.txt
+          # 确保创建一个空文件
+          echo -n "" > ip.txt
 
-          # 处理第一个源: ip.v2too.top
-          echo "Processing V2 Source..."
-          ips_v2=$(curl -s https://ip.v2too.top/api/nodes | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 8)
-          for ip in $ips_v2; do
+          # 1. 获取第一个源: ip.v2too.top
+          # 格式示例：104.16.1.123#V2.123
+          curl -s https://ip.v2too.top/api/nodes | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 10 | while read ip; do
             suffix=$(echo $ip | awk -F. '{print $4}')
-            # 获取国家简码 (如 US, HK, CN)
-            country=$(curl -s --connect-timeout 5 "http://ip-api.com/json/$ip?fields=countryCode" | jq -r '.countryCode // "UNK"')
-            echo "${ip}#V2.${country}.${suffix}" >> ip.txt
-            echo "Added: ${ip} ($country)"
-            sleep 1.5 # 频率限制，防止被 ip-api 封禁
+            echo "${ip}#V2.${suffix}" >> ip.txt
           done
 
-          # 处理第二个源: ip.164746.xyz
-          echo "Processing 164746 Source..."
-          ips_16=$(curl -s https://ip.164746.xyz/ipTop10.html | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 8)
-          for ip in $ips_16; do
+          # 2. 获取第二个源: ip.164746.xyz
+          # 格式示例：172.67.10.45#16.45
+          curl -s https://ip.164746.xyz/ipTop10.html | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 10 | while read ip; do
             suffix=$(echo $ip | awk -F. '{print $4}')
-            country=$(curl -s --connect-timeout 5 "http://ip-api.com/json/$ip?fields=countryCode" | jq -r '.countryCode // "UNK"')
-            echo "${ip}#16.${country}.${suffix}" >> ip.txt
-            echo "Added: ${ip} ($country)"
-            sleep 1.5
+            echo "${ip}#16.${suffix}" >> ip.txt
           done
 
       - name: Commit and Push
@@ -47,5 +38,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ip.txt
-          git commit -m "Update IPs with Country Info" || exit 0
+          git commit -m "Update IPs: V2 and 16 simplified" || exit 0
           git push
