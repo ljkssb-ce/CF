@@ -1,18 +1,40 @@
-- name: Fetch and Format IPs
-        run: |
-          # 清空旧的 ip.txt
-          > ip.txt
+name: Collect IPs with Order
 
-          # 1. 处理第一个源: ip.v2too.top/api/nodes
-          # 格式示例：104.16.1.123#V2.123
+on:
+  schedule:
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch and Format IPs
+        run: |
+          # 确保创建一个空文件
+          echo -n "" > ip.txt
+
+          # 1. 获取第一个源: ip.v2too.top
           curl -s https://ip.v2too.top/api/nodes | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 10 | while read ip; do
             suffix=$(echo $ip | grep -oE "[0-9]{1,3}$")
             echo "${ip}#V2.${suffix}" >> ip.txt
           done
 
-          # 2. 处理第二个源: ip.164746.xyz/ipTop10.html
-          # 格式示例：172.67.10.45#16.45
+          # 2. 获取第二个源: ip.164746.xyz
           curl -s https://ip.164746.xyz/ipTop10.html | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 10 | while read ip; do
             suffix=$(echo $ip | grep -oE "[0-9]{1,3}$")
             echo "${ip}#16.${suffix}" >> ip.txt
           done
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add ip.txt
+          git commit -m "Update IPs: V2 and 16 with dots" || exit 0
+          git push
