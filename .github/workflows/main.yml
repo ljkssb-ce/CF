@@ -17,19 +17,29 @@ jobs:
 
       - name: Fetch and Format IPs
         run: |
-          # 1. 获取北京时间并初始化文件（放在最开头）
-          # 格式示例：127.0.0.1#更新:04-27 15:05
+          # 1. 获取北京时间并初始化文件（放在第一行）
           bj_time=$(date -d '+8 hours' +'%m-%d %H:%M')
           echo "127.0.0.1#更新:${bj_time}" > ip.txt
 
-          # 2. 获取第一个源: ip.v2too.top
-          # 使用 >> 追加到文件
-          curl -s https://ip.v2too.top/api/nodes | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 10 | while read ip; do
+          # 2. 处理第一个源: ip.v2too.top (提取速度并加 MB/s)
+          # 格式示例：104.16.1.123#V2/123/85MB/s
+          echo "Fetching V2 nodes with real speed..."
+          curl -s https://ip.v2too.top/api/nodes | grep -E "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -n 10 | while read line; do
+            # 提取 IP
+            ip=$(echo $line | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")
+            # 提取数字速度并取整
+            speed=$(echo $line | grep -oE "[0-9]+(\.[0-9]+)?(?=MB/s)" | awk '{printf "%.0f", $1}')
+            # 提取 IP 后位
             suffix=$(echo $ip | awk -F. '{print $4}')
-            echo "${ip}#V2/${suffix}" >> ip.txt
+            
+            if [ -z "$speed" ]; then speed="0"; fi
+            # 拼接单位 MB/s
+            echo "${ip}#V2/${suffix}/${speed}MB/s" >> ip.txt
           done
 
-          # 3. 获取第二个源: ip.164746.xyz
+          # 3. 处理第二个源: ip.164746.xyz (不加速度)
+          # 格式示例：172.67.10.45#16/45
+          echo "Fetching Top10 nodes..."
           curl -s https://ip.164746.xyz/ipTop10.html | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 10 | while read ip; do
             suffix=$(echo $ip | awk -F. '{print $4}')
             echo "${ip}#16/${suffix}" >> ip.txt
@@ -40,5 +50,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ip.txt
-          git commit -m "Update IPs: Time info moved to top" || exit 0
+          git commit -m "Update IPs: Speed unit changed to MB/s" || exit 0
           git push
