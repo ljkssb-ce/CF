@@ -2,9 +2,8 @@ name: Collect IPs with Order
 
 on:
   schedule:
-    # 每两小时运行一次，设定在第 5 分钟避开高峰
     - cron: '5 */2 * * *'
-  workflow_dispatch:      # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   collect:
@@ -17,31 +16,33 @@ jobs:
 
       - name: Fetch and Format IPs
         run: |
-          # 1. 获取北京时间并初始化文件（放在第一行）
+          # 1. 初始化文件（第一行北京时间）
           bj_time=$(date -d '+8 hours' +'%m-%d %H:%M')
           echo "127.0.0.1#更新:${bj_time}" > ip.txt
 
-          # 2. 处理第一个源: ip.v2too.top (提取速度并加 MB/s)
-          # 格式示例：104.16.1.123#V2/123/85MB/s
-          echo "Fetching V2 nodes with real speed..."
-          curl -s https://ip.v2too.top/api/nodes | grep -E "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -n 10 | while read line; do
-            # 提取 IP
-            ip=$(echo $line | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")
-            # 提取数字速度并取整
-            speed=$(echo $line | grep -oE "[0-9]+(\.[0-9]+)?(?=MB/s)" | awk '{printf "%.0f", $1}')
-            # 提取 IP 后位
-            suffix=$(echo $ip | awk -F. '{print $4}')
+          # 2. 处理第一个源: ip.v2too.top
+          # 策略：逐行读取，严格分离 IP 和速度
+          echo "Processing V2 Source..."
+          curl -s https://ip.v2too.top/api/nodes | head -n 10 | while read -r line; do
+            # 仅提取行内第一个 IP
+            ip=$(echo "$line" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 1)
+            # 如果没找到 IP 则跳过
+            if [ -z "$ip" ]; then continue; ffi
             
+            # 提取速度（找到 MB/s 前面的数字）
+            speed=$(echo "$line" | grep -oE "[0-9]+(\.[0-9]+)?(?=MB/s)" | awk '{printf "%.0f", $1}')
             if [ -z "$speed" ]; then speed="0"; fi
-            # 拼接单位 MB/s
+            
+            # 提取 IP 最后一段
+            suffix=$(echo "$ip" | cut -d. -f4)
+            
             echo "${ip}#V2/${suffix}/${speed}MB/s" >> ip.txt
           done
 
-          # 3. 处理第二个源: ip.164746.xyz (不加速度)
-          # 格式示例：172.67.10.45#16/45
-          echo "Fetching Top10 nodes..."
-          curl -s https://ip.164746.xyz/ipTop10.html | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 10 | while read ip; do
-            suffix=$(echo $ip | awk -F. '{print $4}')
+          # 3. 处理第二个源: ip.164746.xyz
+          echo "Processing 164746 Source..."
+          curl -s https://ip.164746.xyz/ipTop10.html | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | head -n 10 | while read -r ip; do
+            suffix=$(echo "$ip" | cut -d. -f4)
             echo "${ip}#16/${suffix}" >> ip.txt
           done
 
@@ -50,5 +51,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ip.txt
-          git commit -m "Update IPs: Speed unit changed to MB/s" || exit 0
+          git commit -m "Fix: Source 1 format and suffix glitch" || exit 0
           git push
