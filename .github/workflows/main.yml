@@ -2,7 +2,9 @@ name: Collect IPs with Order
 
 on:
   schedule:
-    - cron: '5 */2 * * *'
+    # 重点在这里：改成了 20
+    # UTC 0-16点（对应北京时间 08:00 到次日 00:00）每两小时的第 20 分钟运行一次
+    - cron: '20 0-16/2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -48,5 +50,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ip.txt
-          git commit -m "Fix: Use jq to parse V2 JSON data" || exit 0
+          git commit -m "Update schedule: Run at 20th minute of every 2 hours" || exit 0
           git push
